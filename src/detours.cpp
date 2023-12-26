@@ -226,7 +226,12 @@ void FASTCALL Detour_UTIL_SayTextFilter(IRecipientFilter &filter, const char *pT
 
 	// DETOUR TO CHANGE CONSOLE COLOR
 	char buf[256];
-	V_snprintf(buf, sizeof(buf), "%s %s", " \x0E CEE ANIDE:\5", pText + sizeof(char[9]));
+
+	//Prints the message to console
+	//Adding the length of "Console:" to the message size truncates the Console: portion of the message
+	//Without it, all messages are CEE ANIDE:Console: <MSG>
+	//Adding too much to the destination length will truncate at the beginning of the message
+	V_snprintf(buf, sizeof(buf), "%s %s", " \x0E CEE ANIDE:\5", pText + sizeof("Console:"));
 
 	UTIL_SayTextFilter(filter, buf, pPlayer, eMessageType);
 }
