@@ -224,14 +224,18 @@ void FASTCALL Detour_UTIL_SayTextFilter(IRecipientFilter &filter, const char *pT
 	if (pPlayer)
 		return UTIL_SayTextFilter(filter, pText, pPlayer, eMessageType);
 
-	// DETOUR TO CHANGE CONSOLE COLOR
+	// DETOUR TO CHANGE CONSOLE COLOR goes here
+	// This is the say message of the console
 	char buf[256];
+
+	//Experiment: add suffix to the end of the message
+	char suffix[5] = "<<<<";
 
 	//Prints the message to console
 	//Adding the length of "Console:" to the message size truncates the Console: portion of the message
 	//Without it, all messages are CEE ANIDE:Console: <MSG>
 	//Adding too much to the destination length will truncate at the beginning of the message
-	V_snprintf(buf, sizeof(buf), "%s %s", " \x0E CEE ANIDE:\5", pText + sizeof("Console:"));
+	V_snprintf(buf, sizeof(buf), "%s %s %s", " \x0E FOO BAR:\5", pText + sizeof("Console:"), suffix);
 
 	UTIL_SayTextFilter(filter, buf, pPlayer, eMessageType);
 }
