@@ -224,8 +224,9 @@ void FASTCALL Detour_UTIL_SayTextFilter(IRecipientFilter &filter, const char *pT
 	if (pPlayer)
 		return UTIL_SayTextFilter(filter, pText, pPlayer, eMessageType);
 
+	// DETOUR TO CHANGE CONSOLE COLOR
 	char buf[256];
-	V_snprintf(buf, sizeof(buf), "%s %s", " \7CONSOLE:\4", pText + sizeof("Console:"));
+	V_snprintf(buf, sizeof(buf), "%s %s", " \x0E CEE ANIDE:\5", pText + sizeof(char[9]));
 
 	UTIL_SayTextFilter(filter, buf, pPlayer, eMessageType);
 }
