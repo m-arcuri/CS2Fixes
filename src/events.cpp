@@ -134,6 +134,17 @@ GAME_EVENT_F(player_hurt)
 	if (!g_bEnableTopDefender)
 		return;
 
+	float flCreditScale = 1.0f;
+	if (g_bEnableZR && g_bScaleDamageCredit)
+	{
+		const char* szWeapon = pEvent->GetString("weapon");
+		ZRWeapon* pWeapon = g_pZRWeaponConfig->FindWeapon(szWeapon);
+		if (pWeapon)
+		{
+			flCreditScale = pWeapon->flKnockback;
+		}
+	}
+
 	CCSPlayerController *pAttacker = (CCSPlayerController*)pEvent->GetPlayerController("attacker");
 	CCSPlayerController *pVictim = (CCSPlayerController*)pEvent->GetPlayerController("userid");
 
@@ -146,8 +157,14 @@ GAME_EVENT_F(player_hurt)
 	if (!pPlayer)
 		return;
 
-	pPlayer->SetTotalDamage(pPlayer->GetTotalDamage() + pEvent->GetInt("dmg_health"));
+	int iDamageCredit = pEvent->GetInt("dmg_health") * flCreditScale;
+	pPlayer->SetTotalDamage(pPlayer->GetTotalDamage() + iDamageCredit);
 	pPlayer->SetTotalHits(pPlayer->GetTotalHits() + 1);
+
+	// test HUD
+	char message[256];
+	V_snprintf(message, sizeof(message), "Actual damage: %d\nCredited damage: %d", pEvent->GetInt("dmg_health"), iDamageCredit);
+	ClientPrint(pAttacker, HUD_PRINTCENTER, message);
 }
 
 GAME_EVENT_F(player_death)

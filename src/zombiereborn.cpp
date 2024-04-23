@@ -84,6 +84,8 @@ static std::string g_szZombieWinOverlayParticle;
 static std::string g_szZombieWinOverlayMaterial;
 static float g_flZombieWinOverlaySize;
 
+bool g_bScaleDamageCredit = false;
+
 FAKE_BOOL_CVAR(zr_enable, "Whether to enable ZR features", g_bEnableZR, false, false)
 FAKE_FLOAT_CVAR(zr_ztele_max_distance, "Maximum distance players are allowed to move after starting ztele", g_flMaxZteleDistance, 150.0f, false)
 FAKE_BOOL_CVAR(zr_ztele_allow_humans, "Whether to allow humans to use ztele", g_bZteleHuman, false, false)
@@ -107,6 +109,7 @@ FAKE_FLOAT_CVAR(zr_human_win_overlay_size, "Size of human's win overlay particle
 FAKE_STRING_CVAR(zr_zombie_win_overlay_particle, "Screenspace particle to display when zombie win", g_szZombieWinOverlayParticle, false)
 FAKE_STRING_CVAR(zr_zombie_win_overlay_material, "Material override for zombie's win overlay particle", g_szZombieWinOverlayMaterial, false)
 FAKE_FLOAT_CVAR(zr_zombie_win_overlay_size, "Size of zombie's win overlay particle", g_flZombieWinOverlaySize, 5.0f, false)
+FAKE_BOOL_CVAR(zr_scale_credit, "Whether to scale damage credit with knockback", g_bScaleDamageCredit, false, false)
 
 void ZR_Precache(IEntityResourceManifest* pResourceManifest)
 {

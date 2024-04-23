@@ -257,6 +257,8 @@ extern CZRPlayerClassManager* g_pZRPlayerClassManager;
 extern bool g_bEnableZR;
 extern EZRRoundState g_ZRRoundState;
 
+extern bool g_bScaleDamageCredit;
+
 void ZR_OnLevelInit();
 void ZR_OnRoundPrestart(IGameEvent* pEvent);
 void ZR_OnRoundStart(IGameEvent* pEvent);
