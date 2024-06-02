@@ -59,6 +59,10 @@ void ZR_Cure(CCSPlayerController *pTargetController);
 void ZR_EndRoundAndAddTeamScore(int iTeamNum);
 void SetupCTeams();
 bool ZR_IsTeamAlive(int iTeamNum);
+void ZR_TopDefenderOnPlayerHurt(CCSPlayerController* pAttacker, CCSPlayerController* pVictim, int iDamage);
+void ZR_TopDefenderOnPlayerDeath(CCSPlayerController* pAttacker, CCSPlayerController* pVictim);
+void ZR_TopDefenderOnRoundStart();
+void ZR_TopDefenderOnRoundEnd();
 
 EZRRoundState g_ZRRoundState = EZRRoundState::ROUND_START;
 static int g_iInfectionCountDown = 0;
@@ -87,6 +91,7 @@ static float g_flMoanInterval = 30.f;
 static bool g_bNapalmGrenades = true;
 static float g_flNapalmDuration = 5.f;
 static float g_flNapalmFullDamage = 50.f;
+static bool g_bEnableTopDefender = false;
 
 static std::string g_szHumanWinOverlayParticle;
 static std::string g_szHumanWinOverlayMaterial;
@@ -128,6 +133,7 @@ FAKE_BOOL_CVAR(zr_infect_shake, "Whether to shake a player's view on infect", g_
 FAKE_FLOAT_CVAR(zr_infect_shake_amp, "Amplitude of shaking effect", g_flInfectShakeAmplitude, 15.f, false);
 FAKE_FLOAT_CVAR(zr_infect_shake_frequency, "Frequency of shaking effect", g_flInfectShakeFrequency, 2.f, false);
 FAKE_FLOAT_CVAR(zr_infect_shake_duration, "Duration of shaking effect", g_flInfectShakeDuration, 5.f, false);
+FAKE_BOOL_CVAR(zr_topdefender_enable, "Whether to use TopDefender", g_bEnableTopDefender, false, false)
 
 // meant only for offline config validation and can easily cause issues when used on live server
 #ifdef _DEBUG
@@ -1015,6 +1021,9 @@ void ZR_OnRoundStart(IGameEvent* pEvent)
 	SetupRespawnToggler();
 	CZRRegenTimer::RemoveAllTimers();
 
+	if (g_bEnableTopDefender)
+		ZR_TopDefenderOnRoundStart();
+
 	for (int i = 0; i < gpGlobals->maxClients; i++)
 	{
 		CCSPlayerController *pController = CCSPlayerController::FromSlot(i);
@@ -1562,6 +1571,9 @@ void ZR_OnPlayerHurt(IGameEvent* pEvent)
 	const char* szWeapon = pEvent->GetString("weapon");
 	int iDmgHealth = pEvent->GetInt("dmg_health");
 
+	if (g_bEnableTopDefender)
+		ZR_TopDefenderOnPlayerHurt(pAttackerController, pVictimController, iDmgHealth);
+
 	// grenade and molotov knockbacks are handled by TakeDamage detours
 	if (!pAttackerController || !pVictimController || !V_strncmp(szWeapon, "inferno", 7) || !V_strncmp(szWeapon, "hegrenade", 9))
 		return;
@@ -1598,6 +1610,12 @@ void ZR_OnPlayerDeath(IGameEvent* pEvent)
 		pController->Respawn();
 		return -1.0f;
 	});
+
+	// handle humans killing zombies when tracking Top Defender statistics
+	CCSPlayerController *pAttackerController = (CCSPlayerController*)pEvent->GetPlayerController("attacker");
+
+	if (g_bEnableTopDefender)
+		ZR_TopDefenderOnPlayerDeath(pAttackerController, pVictimController);
 }
 
 void ZR_OnRoundFreezeEnd(IGameEvent* pEvent)
@@ -1715,6 +1733,104 @@ void ZR_EndRoundAndAddTeamScore(int iTeamNum)
 		g_hTeamT->m_iScore = g_hTeamT->m_iScore() + 1;
 		if (!g_szZombieWinOverlayParticle.empty())
 			ZR_CreateOverlay(g_szZombieWinOverlayParticle.c_str(), 1.0f, g_flZombieWinOverlaySize, flRestartDelay, Color(255, 255, 255), g_szZombieWinOverlayMaterial.c_str());
+	}
+}
+
+void ZR_OnRoundEnd(IGameEvent* pEvent)
+{
+	if (g_bEnableTopDefender)
+		ZR_TopDefenderOnRoundEnd();
+}
+
+// add damage to a human's top defender damage count
+void ZR_TopDefenderOnPlayerHurt(CCSPlayerController* pAttacker, CCSPlayerController* pVictim, int iDamage)
+{
+	// Ignore Ts/zombies and CTs hurting themselves
+	if (!pAttacker || pAttacker->m_iTeamNum() != CS_TEAM_CT || pAttacker->m_iTeamNum() == pVictim->m_iTeamNum())
+		return;
+
+	ZEPlayer* pPlayer = pAttacker->GetZEPlayer();
+
+	if (!pPlayer)
+		return;
+
+	pPlayer->SetTotalDamage(pPlayer->GetTotalDamage() + iDamage);
+	pPlayer->SetTotalHits(pPlayer->GetTotalHits() + 1);
+}
+
+void ZR_TopDefenderOnPlayerDeath(CCSPlayerController* pAttacker, CCSPlayerController* pVictim)
+{
+	//Ignore Ts/zombie kills and ignore CT teamkilling or suicide
+	if (!pAttacker || !pVictim || pAttacker->m_iTeamNum != CS_TEAM_CT || pAttacker->m_iTeamNum == pVictim->m_iTeamNum)
+		return;
+
+	ZEPlayer* pPlayer = pAttacker->GetZEPlayer();
+
+	if (!pPlayer)
+		return;
+
+	pPlayer->SetTotalKills(pPlayer->GetTotalKills() + 1);
+}
+
+void ZR_TopDefenderOnRoundStart()
+{
+	for (int i = 0; i < gpGlobals->maxClients; i++)
+	{
+		ZEPlayer* pPlayer = g_playerManager->GetPlayer(i);
+
+		if (!pPlayer)
+			continue;
+
+		pPlayer->SetTotalDamage(0);
+		pPlayer->SetTotalHits(0);
+		pPlayer->SetTotalKills(0);
+	}
+}
+
+void ZR_TopDefenderOnRoundEnd()
+{
+	CUtlVector<ZEPlayer *> sortedPlayers;
+
+	for (int i = 0; i < gpGlobals->maxClients; i++)
+	{
+		ZEPlayer* pPlayer = g_playerManager->GetPlayer(i);
+
+		if (!pPlayer || pPlayer->GetTotalDamage() == 0)
+			continue;
+
+		CCSPlayerController* pController = CCSPlayerController::FromSlot(pPlayer->GetPlayerSlot());
+
+		if(!pController)
+			continue;
+
+		sortedPlayers.AddToTail(pPlayer);
+	}
+
+	if (sortedPlayers.Count() == 0)
+		return;
+
+	sortedPlayers.Sort([](ZEPlayer *const *a, ZEPlayer *const *b) -> int
+	{
+		return (*a)->GetTotalDamage() < (*b)->GetTotalDamage();
+	});
+
+	ClientPrintAll(HUD_PRINTTALK, " \x09TOP DEFENDERS");
+
+	char colorMap[] = { '\x10', '\x08', '\x09', '\x0B'};
+
+	for (int i = 0; i < sortedPlayers.Count(); i++)
+	{
+		ZEPlayer* pPlayer = sortedPlayers[i];
+		CCSPlayerController* pController = CCSPlayerController::FromSlot(pPlayer->GetPlayerSlot());
+
+		if (i < 5)
+			ClientPrintAll(HUD_PRINTTALK, " %c%i. %s \x01- \x07%i DMG \x05(%i HITS & %i KILLS)", colorMap[MIN(i, 3)], i + 1, pController->GetPlayerName(), pPlayer->GetTotalDamage(), pPlayer->GetTotalHits(), pPlayer->GetTotalKills());
+		else
+			ClientPrint(pController, HUD_PRINTTALK, " \x0C%i. %s \x01- \x07%i DMG \x05(%i HITS & %i KILLS)", i + 1, pController->GetPlayerName(), pPlayer->GetTotalDamage(), pPlayer->GetTotalHits(), pPlayer->GetTotalKills());
+		
+		pPlayer->SetTotalDamage(0);
+		pPlayer->SetTotalHits(0);
+		pPlayer->SetTotalKills(0);
 	}
 }
 
